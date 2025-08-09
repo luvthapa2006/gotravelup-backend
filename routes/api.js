@@ -1,9 +1,16 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { User, Trip, Booking } = require('../config/database');
+const { User, Trip, Booking, Transaction } = require('../config/database');
 
 const router = express.Router();
-
+// --- NEW: Admin password check middleware ---
+const checkAdminPassword = (req, res, next) => {
+    const { password } = req.body;
+    if (password !== process.env.ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'Invalid Admin Password' });
+    }
+    next();
+};
 // REGISTER user
 router.post('/register', async (req, res) => {
     try {
@@ -68,7 +75,15 @@ router.post('/login', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
-
+router.post('/admin/pending-transactions', checkAdminPassword, async (req, res) => {
+    try {
+        const transactions = await Transaction.find({ status: 'pending' })
+            .populate('userId', 'name username'); // Get user's name
+        res.json({ success: true, transactions });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
 // GET user profile
 router.get('/profile', async (req, res) => {
     try {
@@ -81,16 +96,63 @@ router.get('/profile', async (req, res) => {
 });
 
 // ADD money to wallet
-router.post('/wallet/add', async (req, res) => {
+
+// 1. INITIATE a transaction
+router.post('/wallet/initiate-transaction', async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
-        const { amount } = req.body;
+        
+        const { amount, method } = req.body;
 
-        const user = await User.findById(req.session.userId);
-        user.wallet += parseFloat(amount);
+        const newTransaction = new Transaction({
+            userId: req.session.userId,
+            amount: parseFloat(amount),
+            method: method,
+            status: 'pending'
+        });
+
+        await newTransaction.save();
+
+        res.json({ success: true, message: 'Transaction initiated', transactionId: newTransaction._id });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// 2. CHECK transaction status
+router.get('/wallet/payment-status/:transactionId', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
+
+        const transaction = await Transaction.findById(req.params.transactionId);
+
+        if (!transaction) {
+            return res.status(404).json({ success: false, message: 'Transaction not found' });
+        }
+
+        res.json({ success: true, status: transaction.status });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// 3. CONFIRM a transaction (This is for the admin/cash collector)
+router.post('/wallet/confirm-transaction/:transactionId', checkAdminPassword, async (req, res) => {
+    try {
+        const transaction = await Transaction.findById(req.params.transactionId);
+
+        if (!transaction || transaction.status !== 'pending') {
+            return res.status(400).json({ success: false, message: 'Transaction not found or already processed' });
+        }
+
+        const user = await User.findById(transaction.userId);
+        user.wallet += transaction.amount;
         await user.save();
 
-        res.json({ success: true, message: 'Wallet updated', wallet: user.wallet });
+        transaction.status = 'completed';
+        await transaction.save();
+
+        res.json({ success: true, message: 'Payment confirmed and wallet updated', newBalance: user.wallet });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
     }

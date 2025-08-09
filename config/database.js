@@ -50,6 +50,28 @@ const bookingSchema = new mongoose.Schema({
     bookingDate: { type: Date, default: Date.now }
 });
 
+// ... (after the Booking schema)
+
+// Transaction schema to track pending and completed payments
+const transactionSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    amount: Number,
+    method: String, // 'QR' or 'Cash'
+    status: { type: String, default: 'pending' }, // pending, completed, failed
+    createdAt: { type: Date, default: Date.now }
+});
+
+const Transaction = mongoose.model('Transaction', transactionSchema);
+
+// ... (in the module.exports)
+module.exports = {
+    connectToMongoDB,
+    User,
+    Trip,
+    Booking,
+    Transaction // ✅ Add the new model here
+};
+
 // Create models
 const User = mongoose.model('User', userSchema);
 const Trip = mongoose.model('Trip', tripSchema);
