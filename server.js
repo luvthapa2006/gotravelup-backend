@@ -38,9 +38,13 @@ const apiRoutes = require('./routes/api');
 const { connectToMongoDB } = require('./config/database');
 const MongoStore = require('connect-mongo');
 
+// Initialize the Express app
 const app = express();
 
-// --- START: ADD THIS CODE ---
+// --- Main Server Configuration Starts Here ---
+
+// Disable the x-powered-by header for security
+app.disable('x-powered-by');
 
 // Connect to MongoDB
 connectToMongoDB();
@@ -48,24 +52,20 @@ connectToMongoDB();
 // Define the Port
 const PORT = process.env.PORT || 3001;
 
-// CORS configuration to allow credentials
-// List of allowed origins (your frontend domains)
+// List of allowed origins
 const allowedOrigins = [
     'https://gotravelup.netlify.app',
     'https://gotravelup-frontend.onrender.com'
-    // You can add your local development URL here too, e.g., 'http://localhost:5500'
 ];
 
-// CORS configuration to allow credentials from the whitelisted origins
+// CORS configuration
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
         }
-        return callback(null, true);
     },
     credentials: true
 }));
@@ -74,16 +74,17 @@ app.use(cors({
 app.use(express.json());
 
 // Session configuration
+app.set('trust proxy', 1); // Important for services like Render
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI }),
     cookie: {
-        secure: true, // Must be true since we are using https
+        secure: true,
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24, // 1 day
-        sameSite: 'none' // ✅ This is the crucial change
+        sameSite: 'none'
     }
 }));
 
@@ -99,5 +100,3 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`✅ Server is running on port ${PORT}`);
 });
-
-// --- END: ADD THIS CODE ---```
