@@ -5,6 +5,7 @@ const cors = require('cors');
 const session = require('express-session');
 const apiRoutes = require('./routes/api');
 const { connectToMongoDB } = require('./config/database');
+const MongoStore = require('connect-mongo');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,7 +28,15 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'gotravelup-secret-key-2025',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, sameSite: 'none', maxAge: 24 * 60 * 60 * 1000 } // 24 hrs
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI, // same as your DB connection string
+        ttl: 24 * 60 * 60 // session lifetime in seconds
+    }),
+    cookie: {
+        secure: true, // true if using HTTPS
+        sameSite: 'none',
+        maxAge: 24 * 60 * 60 * 1000 // 1 day
+    }
 }));
 
 // ✅ API Routes
