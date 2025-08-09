@@ -72,27 +72,27 @@ router.post('/login', async (req, res) => {
 // GET user profile
 router.get('/profile', async (req, res) => {
     try {
-        if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
+        if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
         const user = await User.findById(req.session.userId).select('-password');
-        res.json(user);
+        res.json({ success: true, user });
     } catch (err) {
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
 // ADD money to wallet
 router.post('/wallet/add', async (req, res) => {
     try {
-        if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
+        if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
         const { amount } = req.body;
 
         const user = await User.findById(req.session.userId);
         user.wallet += parseFloat(amount);
         await user.save();
 
-        res.json({ message: 'Wallet updated', wallet: user.wallet });
+        res.json({ success: true, message: 'Wallet updated', wallet: user.wallet });
     } catch (err) {
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
