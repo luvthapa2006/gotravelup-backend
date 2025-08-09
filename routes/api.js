@@ -75,6 +75,17 @@ router.post('/login', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+// LOGOUT user
+router.post('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'Could not log out, please try again.' });
+        }
+        res.clearCookie('connect.sid'); // Clears the session cookie
+        res.json({ success: true, message: 'Logout successful' });
+    });
+});
+
 router.post('/admin/pending-transactions', checkAdminPassword, async (req, res) => {
     try {
         const transactions = await Transaction.find({ status: 'pending' })
