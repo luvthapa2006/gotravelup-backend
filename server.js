@@ -13,23 +13,28 @@ const PORT = process.env.PORT || 5000;
 // ✅ Connect to MongoDB Atlas
 connectToMongoDB();
 
-// ✅ CORS setup to allow Netlify frontend
-app.use(cors({
-    origin: 'https://gotravelup.netlify.app', // change to your Netlify frontend URL
-    credentials: true
-}));
+// ✅ CORS setup to allow Netlify frontend + preflight handling
+const corsOptions = {
+  origin: 'https://gotravelup.netlify.app',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle preflight for all routes
 
 // ✅ Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Sessions (temporary MemoryStore, replace for production)
+// ✅ Sessions with MongoDB store
 app.use(session({
     secret: process.env.SESSION_SECRET || 'gotravelup-secret-key-2025',
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
-        mongoUrl: process.env.MONGODB_URI, // same as your DB connection string
+        mongoUrl: process.env.MONGODB_URI,
         ttl: 24 * 60 * 60 // session lifetime in seconds
     }),
     cookie: {
