@@ -1,5 +1,36 @@
-require('dotenv').config();
+// MUST go at the very top before requiring any other files
 const express = require('express');
+
+// Patch express & Router before anything else loads
+['get', 'post', 'put', 'delete', 'use'].forEach(method => {
+  const original = express.application[method];
+  express.application[method] = function (path, ...handlers) {
+    if (typeof path === 'string' && path.startsWith('http')) {
+      console.error(`🚨 BAD ROUTE on app.${method}:`, path);
+      console.trace();
+    }
+    return original.call(this, path, ...handlers);
+  };
+});
+
+const origRouter = express.Router;
+express.Router = function (...args) {
+  const router = origRouter.apply(this, args);
+  ['get', 'post', 'put', 'delete', 'use'].forEach(method => {
+    const orig = router[method];
+    router[method] = function (path, ...handlers) {
+      if (typeof path === 'string' && path.startsWith('http')) {
+        console.error(`🚨 BAD ROUTE on router.${method}:`, path);
+        console.trace();
+      }
+      return orig.call(this, path, ...handlers);
+    };
+  });
+  return router;
+};
+
+// Now load everything else
+require('dotenv').config();
 const path = require('path');
 const cors = require('cors');
 const session = require('express-session');
@@ -8,62 +39,3 @@ const { connectToMongoDB } = require('./config/database');
 const MongoStore = require('connect-mongo');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-
-// ✅ Connect to MongoDB Atlas
-connectToMongoDB();
-
-// ✅ CORS setup to allow Netlify frontend + preflight handling
-const corsOptions = {
-  origin: 'https://gotravelup.netlify.app',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight for all routes
-
-// ✅ Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ✅ Sessions with MongoDB store
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'gotravelup-secret-key-2025',
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: process.env.MONGODB_URI,
-        ttl: 24 * 60 * 60 // session lifetime in seconds
-    }),
-    cookie: {
-        secure: true, // true if using HTTPS
-        sameSite: 'none',
-        maxAge: 24 * 60 * 60 * 1000 // 1 day
-    }
-}));
-
-// ✅ API Routes
-app.use('/api', apiRoutes);
-
-// ✅ Simple status check route
-app.get('/', (req, res) => {
-    res.send('GoTravelUp backend is running 🚀');
-});
-
-// ✅ 404 handler
-app.use((req, res) => {
-    res.status(404).json({ message: 'Page not found' });
-});
-
-// ✅ Error handler
-app.use((err, req, res, next) => {
-    console.error('Server error:', err);
-    res.status(500).json({ message: 'Internal server error' });
-});
-
-// ✅ Start server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`GoTravelUp backend running on http://0.0.0.0:${PORT}`);
-});
