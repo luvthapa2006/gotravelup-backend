@@ -1,47 +1,55 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const session = require('express-session');
 const cors = require('cors');
-const { connectToMongoDB } = require('./config/database');
+const session = require('express-session');
 const apiRoutes = require('./routes/api');
+const { connectToMongoDB } = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Connect to DB
+// ✅ Connect to MongoDB Atlas
 connectToMongoDB();
 
-// Middleware
+// ✅ CORS setup to allow Netlify frontend
 app.use(cors({
-    origin: 'https://gotravelup.netlify.app', // your frontend Netlify URL
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: 'https://gotravelup.netlify.app', // change to your Netlify frontend URL
     credentials: true
 }));
+
+// ✅ Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Session configuration (use proper store in production)
+// ✅ Sessions (temporary MemoryStore, replace for production)
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'goodtogo-secret-key-2025',
+    secret: process.env.SESSION_SECRET || 'gotravelup-secret-key-2025',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hrs
 }));
 
-// API Routes
+// ✅ API Routes
 app.use('/api', apiRoutes);
 
-// 404 handler
+// ✅ Simple status check route
+app.get('/', (req, res) => {
+    res.send('GoTravelUp backend is running 🚀');
+});
+
+// ✅ 404 handler
 app.use((req, res) => {
-    res.status(404).json({ message: 'API route not found' });
+    res.status(404).json({ message: 'Page not found' });
 });
 
-// Error handler
+// ✅ Error handler
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ message: 'Internal Server Error' });
+    console.error('Server error:', err);
+    res.status(500).json({ message: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-    console.log(`GoTravelUp backend running on port ${PORT}`);
+// ✅ Start server
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`GoTravelUp backend running on http://0.0.0.0:${PORT}`);
 });
