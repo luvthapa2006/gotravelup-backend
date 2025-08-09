@@ -72,6 +72,7 @@ app.use(cors({
 
 // Middleware to parse JSON bodies
 app.use(express.json());
+app.use('/assets', express.static('assets'));
 
 // Session configuration
 app.set('trust proxy', 1); // Important for services like Render
