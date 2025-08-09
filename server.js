@@ -80,9 +80,10 @@ app.use(session({
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI }),
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // true in production
+        secure: true, // Must be true since we are using https
         httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24 // 1 day
+        maxAge: 1000 * 60 * 60 * 24, // 1 day
+        sameSite: 'none' // ✅ This is the crucial change
     }
 }));
 
