@@ -49,8 +49,24 @@ connectToMongoDB();
 const PORT = process.env.PORT || 3001;
 
 // CORS configuration to allow credentials
+// List of allowed origins (your frontend domains)
+const allowedOrigins = [
+    'https://gotravelup.netlify.app',
+    'https://gotravelup-frontend.onrender.com'
+    // You can add your local development URL here too, e.g., 'http://localhost:5500'
+];
+
+// CORS configuration to allow credentials from the whitelisted origins
 app.use(cors({
-    origin: 'https://gotravelup-frontend.onrender.com', // Your frontend URL
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
     credentials: true
 }));
 
@@ -83,4 +99,4 @@ app.listen(PORT, () => {
     console.log(`✅ Server is running on port ${PORT}`);
 });
 
-// --- END: ADD THIS CODE ---
+// --- END: ADD THIS CODE ---```
