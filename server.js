@@ -39,3 +39,48 @@ const { connectToMongoDB } = require('./config/database');
 const MongoStore = require('connect-mongo');
 
 const app = express();
+
+// --- START: ADD THIS CODE ---
+
+// Connect to MongoDB
+connectToMongoDB();
+
+// Define the Port
+const PORT = process.env.PORT || 3001;
+
+// CORS configuration to allow credentials
+app.use(cors({
+    origin: 'https://gotravelup-frontend.onrender.com', // Your frontend URL
+    credentials: true
+}));
+
+// Middleware to parse JSON bodies
+app.use(express.json());
+
+// Session configuration
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI }),
+    cookie: {
+        secure: process.env.NODE_ENV === 'production', // true in production
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 24 // 1 day
+    }
+}));
+
+// API Routes
+app.use('/api', apiRoutes);
+
+// Root endpoint for testing
+app.get('/', (req, res) => {
+    res.send('Good to Go Backend is running! 🚀');
+});
+
+// Start the server
+app.listen(PORT, () => {
+    console.log(`✅ Server is running on port ${PORT}`);
+});
+
+// --- END: ADD THIS CODE ---
