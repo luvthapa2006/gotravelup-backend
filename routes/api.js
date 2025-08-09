@@ -137,15 +137,34 @@ router.post('/book-trip', async (req, res) => {
     }
 });
 
+
 // GET my trips
 router.get('/my-trips', async (req, res) => {
     try {
-        if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
+        if (!req.session.userId) {
+            return res.status(401).json({ success: false, message: 'Not logged in' });
+        }
 
-        const bookings = await Booking.find({ userId: req.session.userId }).populate('tripId');
-        res.json(bookings);
+        const userBookings = await Booking.find({ userId: req.session.userId }).populate('tripId');
+
+        if (!userBookings) {
+            return res.json({ success: true, bookings: [] });
+        }
+
+        // Map the bookings to a more frontend-friendly format
+        const formattedBookings = userBookings.map(booking => ({
+            _id: booking._id,
+            destination: booking.tripId.destination,
+            status: "Booked", // You can enhance this later
+            bookedAt: booking.bookingDate,
+            amount: booking.tripId.salePrice
+        }));
+
+        res.json({ success: true, bookings: formattedBookings });
+
     } catch (err) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error fetching my trips:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
