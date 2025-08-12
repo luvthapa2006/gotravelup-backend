@@ -73,6 +73,7 @@ app.use(cors({
 // Middleware to parse JSON bodies
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+app.use('/js', express.static('js'));
 app.use('/assets', express.static('assets'));
 
 // Session configuration
