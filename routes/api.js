@@ -1,91 +1,141 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { User, Trip, Booking, Transaction } = require('../config/database');
+const multer = require('multer');
+const { Parser } = require('json2csv');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
-// --- NEW: Admin password check middleware ---
+
+// --- Multer Configuration for Image Uploads ---
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        // Create an 'uploads' directory if it doesn't exist
+        const uploadDir = 'uploads/';
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir);
+        }
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        // Create a unique filename to avoid overwrites
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage: storage });
+
+
+// --- Admin password check middleware ---
 const checkAdminPassword = (req, res, next) => {
-    const { password } = req.body;
+    // Check password in headers for GET requests, and body for others
+    const password = req.headers['admin-password'] || req.body.password;
     if (password !== process.env.ADMIN_PASSWORD) {
         return res.status(401).json({ success: false, message: 'Invalid Admin Password' });
     }
     next();
 };
-// REGISTER user
-router.post('/register', async (req, res) => {
+
+// =============================================
+// ADMIN ROUTES
+// =============================================
+
+// --- Trip Management ---
+// Add a new trip
+router.post('/admin/trips', checkAdminPassword, upload.single('image'), async (req, res) => {
     try {
-        const { name, gender, sapId, email, phone, username, password, referralCode } = req.body;
+        const { destination, originalPrice, salePrice, description, date, category, maxParticipants } = req.body;
+        const imagePath = req.file ? `/${req.file.path.replace(/\\/g, "/")}` : ''; // Get the path of the uploaded file
 
-        // Check if username already exists
-        const existingUser = await User.findOne({ username });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Username already taken' });
+        if (!imagePath) {
+            return res.status(400).json({ success: false, message: 'Trip image is required.' });
         }
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Generate referral code
-        const generatedReferralCode = username.substring(0, 3) + Math.floor(Math.random() * 1000);
-
-        // Create new user
-        const newUser = new User({
-            name, gender, sapId, email, phone,
-            username,
-            password: hashedPassword,
-            wallet: 50, // Initial wallet credit
-            referralCode: generatedReferralCode
+        
+        const newTrip = new Trip({
+            destination,
+            originalPrice,
+            salePrice,
+            description,
+            date,
+            category,
+            maxParticipants,
+            image: imagePath // Save the path to the image
         });
 
-        await newUser.save();
-        res.json({ message: 'User registered successfully', referralCode: generatedReferralCode });
+        await newTrip.save();
+        res.json({ success: true, message: 'Trip added successfully!', trip: newTrip });
 
     } catch (err) {
         console.error(err);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error while adding trip' });
     }
 });
 
-// VALIDATE referral code
-router.post('/validate-referral', async (req, res) => {
+// Delete a trip
+router.delete('/admin/trips/:id', checkAdminPassword, async (req, res) => {
     try {
-        const { referralCode } = req.body;
-        const user = await User.findOne({ referralCode });
-        res.json({ valid: !!user });
+        await Trip.findByIdAndDelete(req.params.id);
+        // Also delete associated bookings to keep db clean
+        await Booking.deleteMany({ tripId: req.params.id });
+        res.json({ success: true, message: 'Trip deleted successfully.' });
     } catch (err) {
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error.' });
     }
 });
 
-// LOGIN user
-router.post('/login', async (req, res) => {
+
+// --- User Management ---
+// Get all users
+router.get('/admin/users', checkAdminPassword, async (req, res) => {
     try {
-        const { username, password } = req.body;
-        const user = await User.findOne({ username });
-
-        if (!user) return res.status(400).json({ message: 'Invalid username or password' });
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: 'Invalid username or password' });
-
-        req.session.userId = user._id;
-        res.json({ message: 'Login successful' });
-
+        const users = await User.find().select('-password');
+        res.json({ success: true, users });
     } catch (err) {
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-// LOGOUT user
-router.post('/logout', (req, res) => {
-    req.session.destroy(err => {
-        if (err) {
-            return res.status(500).json({ success: false, message: 'Could not log out, please try again.' });
-        }
-        res.clearCookie('connect.sid'); // Clears the session cookie
-        res.json({ success: true, message: 'Logout successful' });
-    });
+
+// Download all users as CSV
+router.get('/admin/users/download', checkAdminPassword, async (req, res) => {
+    try {
+        const users = await User.find().select('-password -__v').lean();
+        const json2csvParser = new Parser();
+        const csv = json2csvParser.parse(users);
+
+        res.header('Content-Type', 'text/csv');
+        res.attachment("users.csv");
+        res.send(csv);
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Failed to generate CSV.' });
+    }
 });
 
+// Delete a user
+router.delete('/admin/users/:id', checkAdminPassword, async (req, res) => {
+    try {
+        await User.findByIdAndDelete(req.params.id);
+        // Also delete associated bookings and transactions
+        await Booking.deleteMany({ userId: req.params.id });
+        await Transaction.deleteMany({ userId: req.params.id });
+        res.json({ success: true, message: 'User deleted successfully.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
+
+// Get users who booked a specific trip
+router.get('/admin/trips/:id/bookings', checkAdminPassword, async (req, res) => {
+    try {
+        const bookings = await Booking.find({ tripId: req.params.id }).populate('userId', '-password');
+        res.json({ success: true, bookings });
+    } catch(err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+
+// --- Payment Management ---
 router.post('/admin/pending-transactions', checkAdminPassword, async (req, res) => {
     try {
         const transactions = await Transaction.find({ status: 'pending' })
@@ -95,59 +145,7 @@ router.post('/admin/pending-transactions', checkAdminPassword, async (req, res) 
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-// GET user profile
-router.get('/profile', async (req, res) => {
-    try {
-        if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
-        const user = await User.findById(req.session.userId).select('-password');
-        res.json({ success: true, user });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
 
-// ADD money to wallet
-
-// 1. INITIATE a transaction
-router.post('/wallet/initiate-transaction', async (req, res) => {
-    try {
-        if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
-        
-        const { amount, method } = req.body;
-
-        const newTransaction = new Transaction({
-            userId: req.session.userId,
-            amount: parseFloat(amount),
-            method: method,
-            status: 'pending'
-        });
-
-        await newTransaction.save();
-
-        res.json({ success: true, message: 'Transaction initiated', transactionId: newTransaction._id });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-// 2. CHECK transaction status
-router.get('/wallet/payment-status/:transactionId', async (req, res) => {
-    try {
-        if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
-
-        const transaction = await Transaction.findById(req.params.transactionId);
-
-        if (!transaction) {
-            return res.status(404).json({ success: false, message: 'Transaction not found' });
-        }
-
-        res.json({ success: true, status: transaction.status });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-// 3. CONFIRM a transaction (This is for the admin/cash collector)
 router.post('/wallet/confirm-transaction/:transactionId', checkAdminPassword, async (req, res) => {
     try {
         const transaction = await Transaction.findById(req.params.transactionId);
@@ -164,6 +162,79 @@ router.post('/wallet/confirm-transaction/:transactionId', checkAdminPassword, as
         await transaction.save();
 
         res.json({ success: true, message: 'Payment confirmed and wallet updated', newBalance: user.wallet });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+
+// =============================================
+// PUBLIC & USER ROUTES
+// =============================================
+
+// REGISTER user
+router.post('/register', async (req, res) => {
+    try {
+        const { name, gender, sapId, email, phone, username, password, referralCode } = req.body;
+        const existingUser = await User.findOne({ username });
+        if (existingUser) {
+            return res.status(400).json({ message: 'Username already taken' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const generatedReferralCode = username.substring(0, 3).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
+        const newUser = new User({
+            name, gender, sapId, email, phone, username,
+            password: hashedPassword,
+            wallet: 50,
+            referralCode: generatedReferralCode
+        });
+        await newUser.save();
+        res.status(201).json({ success: true, message: 'User registered successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// LOGIN user
+router.post('/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const user = await User.findOne({ username });
+
+        if (!user) return res.status(400).json({ message: 'Invalid username or password' });
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(400).json({ message: 'Invalid username or password' });
+
+        req.session.userId = user._id;
+        res.json({ success: true, message: 'Login successful' });
+
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// LOGOUT user
+router.post('/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).json({ success: false, message: 'Could not log out, please try again.' });
+        }
+        res.clearCookie('connect.sid');
+        res.json({ success: true, message: 'Logout successful' });
+    });
+});
+
+// GET user profile
+router.get('/profile', async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+        const user = await User.findById(req.session.userId).select('-password');
+        if (!user) {
+             return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+        res.json({ success: true, user });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error' });
     }
@@ -191,25 +262,21 @@ router.post('/book-trip', async (req, res) => {
         if (!trip) return res.status(404).json({ message: 'Trip not found' });
         if (user.wallet < trip.salePrice) return res.status(400).json({ message: 'Insufficient wallet balance' });
 
-        // Deduct wallet
         user.wallet -= trip.salePrice;
-        await user.save();
-
-        // Increase trip bookings
         trip.currentBookings += 1;
+        
+        await user.save();
         await trip.save();
 
-        // Save booking record
-        const booking = new Booking({ userId: user._id, tripId: trip._id });
+        const booking = new Booking({ userId: user._id, tripId: trip._id, amount: trip.salePrice, destination: trip.destination });
         await booking.save();
 
-        res.json({ message: 'Trip booked successfully', wallet: user.wallet });
+        res.json({ success: true, message: 'Trip booked successfully!', newWalletBalance: user.wallet });
 
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
     }
 });
-
 
 // GET my trips
 router.get('/my-trips', async (req, res) => {
@@ -219,16 +286,11 @@ router.get('/my-trips', async (req, res) => {
         }
 
         const userBookings = await Booking.find({ userId: req.session.userId }).populate('tripId');
-
-        if (!userBookings) {
-            return res.json({ success: true, bookings: [] });
-        }
-
-        // Map the bookings to a more frontend-friendly format
+        
         const formattedBookings = userBookings.map(booking => ({
             _id: booking._id,
             destination: booking.tripId.destination,
-            status: "Booked", // You can enhance this later
+            status: "Booked",
             bookedAt: booking.bookingDate,
             amount: booking.tripId.salePrice
         }));
@@ -241,20 +303,55 @@ router.get('/my-trips', async (req, res) => {
     }
 });
 
+// Wallet Routes (initiate, check status)
+router.post('/wallet/initiate-transaction', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
+        
+        const { amount, method } = req.body;
+
+        const newTransaction = new Transaction({
+            userId: req.session.userId,
+            amount: parseFloat(amount),
+            method: method,
+            status: 'pending'
+        });
+
+        await newTransaction.save();
+        res.json({ success: true, message: 'Transaction initiated', transactionId: newTransaction._id });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+router.get('/wallet/payment-status/:transactionId', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
+        const transaction = await Transaction.findById(req.params.transactionId);
+        if (!transaction) return res.status(404).json({ success: false, message: 'Transaction not found' });
+        res.json({ success: true, status: transaction.status });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+
 // DELETE account
 router.delete('/account', async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
 
         await Booking.deleteMany({ userId: req.session.userId });
+        await Transaction.deleteMany({ userId: req.session.userId });
         await User.findByIdAndDelete(req.session.userId);
 
         req.session.destroy();
-        res.json({ message: 'Account deleted successfully' });
+        res.json({ success: true, message: 'Account deleted successfully' });
 
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
 
 module.exports = router;
