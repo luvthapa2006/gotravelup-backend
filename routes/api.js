@@ -1,10 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { User, Trip, Booking, Transaction } = require('../config/database');
 const multer = require('multer');
 const { Parser } = require('json2csv');
 const path = require('path');
 const fs = require('fs');
+const { User, Trip, Booking, Transaction, RefundRequest } = require('../config/database');
 
 const router = express.Router();
 
@@ -44,6 +44,57 @@ const checkAdminPassword = (req, res, next) => {
 router.post('/admin/verify', checkAdminPassword, (req, res) => {
     // If the checkAdminPassword middleware passes, the password is correct.
     res.json({ success: true, message: 'Password verified.' });
+});
+
+// --- Refund Management ---
+// Get all pending refund requests
+router.get('/admin/refunds', checkAdminPassword, async (req, res) => {
+    try {
+        const refunds = await RefundRequest.find({ status: 'pending' })
+            .populate('userId', 'name username');
+        res.json({ success: true, refunds });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Approve a refund request
+router.post('/admin/refunds/:refundId/approve', checkAdminPassword, async (req, res) => {
+    try {
+        const refund = await RefundRequest.findById(req.params.refundId);
+        if (!refund || refund.status !== 'pending') {
+            return res.status(400).json({ message: 'Refund request not found or already processed.' });
+        }
+
+        // Add money back to user's wallet
+        const user = await User.findById(refund.userId);
+        user.wallet += refund.amount;
+        await user.save();
+
+        // Update refund status
+        refund.status = 'approved';
+        await refund.save();
+
+        res.json({ success: true, message: 'Refund approved and wallet updated.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Deny (delete) a pending transaction
+router.delete('/admin/transactions/:transactionId', checkAdminPassword, async (req, res) => {
+    try {
+        const transaction = await Transaction.findById(req.params.transactionId);
+
+        if (!transaction || transaction.status !== 'pending') {
+            return res.status(400).json({ message: 'Transaction not found or not in pending state.' });
+        }
+
+        await Transaction.findByIdAndDelete(req.params.transactionId);
+        res.json({ success: true, message: 'Transaction denied and deleted.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
 });
 
 // --- Trip Management ---
@@ -89,6 +140,40 @@ router.delete('/admin/trips/:id', checkAdminPassword, async (req, res) => {
     }
 });
 
+// CANCEL a trip booking
+router.post('/bookings/:bookingId/cancel', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
+
+        const booking = await Booking.findById(req.params.bookingId).populate('tripId');
+        if (!booking || booking.userId.toString() !== req.session.userId) {
+            return res.status(404).json({ message: 'Booking not found or access denied.' });
+        }
+
+        if (booking.status === 'cancelled') {
+            return res.status(400).json({ message: 'This trip has already been cancelled.' });
+        }
+
+        // Create a refund request
+        const newRefund = new RefundRequest({
+            userId: booking.userId,
+            bookingId: booking._id,
+            tripDestination: booking.tripId.destination,
+            amount: booking.tripId.salePrice
+        });
+        await newRefund.save();
+
+        // Mark the original booking as cancelled
+        booking.status = 'cancelled';
+        await booking.save();
+
+        res.json({ success: true, message: 'Trip cancelled. Your refund request has been submitted for approval.' });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error during cancellation.' });
+    }
+});
 
 // --- User Management ---
 // Get all users
@@ -274,7 +359,13 @@ router.post('/book-trip', async (req, res) => {
         await user.save();
         await trip.save();
 
-        const booking = new Booking({ userId: user._id, tripId: trip._id, amount: trip.salePrice, destination: trip.destination });
+        // ✅ FIXED: Saves all necessary info to the booking document
+        const booking = new Booking({ 
+            userId: user._id, 
+            tripId: trip._id, 
+            amount: trip.salePrice, 
+            destination: trip.destination 
+        });
         await booking.save();
 
         res.json({ success: true, message: 'Trip booked successfully!', newWalletBalance: user.wallet });
@@ -291,14 +382,16 @@ router.get('/my-trips', async (req, res) => {
             return res.status(401).json({ success: false, message: 'Not logged in' });
         }
 
-        const userBookings = await Booking.find({ userId: req.session.userId }).populate('tripId');
+        // We no longer need to .populate() here since we saved the data
+        const userBookings = await Booking.find({ userId: req.session.userId });
         
+        // ✅ FIXED: Maps the data directly from the booking document
         const formattedBookings = userBookings.map(booking => ({
             _id: booking._id,
-            destination: booking.tripId.destination,
-            status: "Booked",
+            destination: booking.destination,
+            status: booking.status, // Uses the actual status
             bookedAt: booking.bookingDate,
-            amount: booking.tripId.salePrice
+            amount: booking.amount
         }));
 
         res.json({ success: true, bookings: formattedBookings });

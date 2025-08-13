@@ -13,7 +13,7 @@ async function connectToMongoDB() {
     }
 }
 
-// --- STEP 1: Define all schemas first ---
+// --- STEP 1: Define all schemas ---
 
 const userSchema = new mongoose.Schema({
     name: String,
@@ -44,16 +44,27 @@ const tripSchema = new mongoose.Schema({
 const bookingSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     tripId: { type: mongoose.Schema.Types.ObjectId, ref: 'Trip' },
-    bookingDate: { type: Date, default: Date.now }
+    bookingDate: { type: Date, default: Date.now },
+    amount: Number,
+    destination: String,
+    status: { type: String, default: 'active' } // active, cancelled
 });
 
-// Transaction schema to track pending and completed payments
 const transactionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     amount: Number,
     method: String, // 'QR' or 'Cash'
     status: { type: String, default: 'pending' }, // pending, completed, failed
     createdAt: { type: Date, default: Date.now }
+});
+
+const refundRequestSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
+    tripDestination: String,
+    amount: Number,
+    requestedAt: { type: Date, default: Date.now },
+    status: { type: String, default: 'pending' } // 'pending', 'approved'
 });
 
 
@@ -63,6 +74,7 @@ const User = mongoose.model('User', userSchema);
 const Trip = mongoose.model('Trip', tripSchema);
 const Booking = mongoose.model('Booking', bookingSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
+const RefundRequest = mongoose.model('RefundRequest', refundRequestSchema);
 
 
 // --- STEP 3: Export the models ---
@@ -72,5 +84,6 @@ module.exports = {
     User,
     Trip,
     Booking,
-    Transaction
+    Transaction,
+    RefundRequest
 };
