@@ -496,12 +496,13 @@ router.post('/wallet/initiate-transaction', async (req, res) => {
         
         const { amount, method } = req.body;
 
-        const newTransaction = new Transaction({
-            userId: req.session.userId,
-            amount: parseFloat(amount),
-            method: method,
-            status: 'pending'
-        });
+const newTransaction = new Transaction({
+    userId: req.session.userId,
+    amount: parseFloat(amount),
+    type: 'credit', // FIX: Set the transaction type
+    details: `Pending payment via ${method}`, // FIX: Use the 'details' field
+    status: 'pending'
+});
 
         await newTransaction.save();
         res.json({ success: true, message: 'Transaction initiated', transactionId: newTransaction._id });
