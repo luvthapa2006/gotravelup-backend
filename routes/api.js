@@ -104,6 +104,14 @@ router.post('/admin/refunds/:refundId/approve', checkAdminPassword, async (req, 
         // Update refund status
         refund.status = 'approved';
         await refund.save();
+        // Create a refund transaction record
+const refundTransaction = new Transaction({
+    userId: user._id,
+    amount: refund.amount,
+    type: 'refund',
+    details: `Refund for Trip: ${refund.tripDestination}`
+});
+await refundTransaction.save();
 
         res.json({ success: true, message: 'Refund approved and wallet updated.' });
     } catch (err) {
@@ -430,6 +438,14 @@ router.post('/book-trip', async (req, res) => {
         await user.save({ session });
         await trip.save({ session });
         await booking.save({ session });
+        // Create a debit transaction record for this booking
+        const debitTransaction = new Transaction({
+            userId: user._id,
+            amount: trip.salePrice,
+            type: 'debit',
+            details: `Booked Trip: ${trip.destination}`
+        });
+        await debitTransaction.save({ session });
 
         await session.commitTransaction();
         session.endSession();
@@ -520,6 +536,23 @@ router.delete('/account', async (req, res) => {
 
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
+    }
+});
+// GET user's wallet transaction history
+router.get('/wallet/history', async (req, res) => {
+    try {
+        if (!req.session.userId) {
+            return res.status(401).json({ success: false, message: 'Not logged in' });
+        }
+
+        const transactions = await Transaction.find({ userId: req.session.userId })
+            .sort({ createdAt: -1 }); // Sort by newest first
+            
+        res.json({ success: true, history: transactions });
+
+    } catch (err) {
+        console.error('Error fetching wallet history:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 

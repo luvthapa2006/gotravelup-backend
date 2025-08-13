@@ -51,10 +51,11 @@ const bookingSchema = new mongoose.Schema({
 });
 
 const transactionSchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    amount: Number,
-    method: String, // 'QR' or 'Cash'
-    status: { type: String, default: 'pending' }, // pending, completed, failed
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    amount: { type: Number, required: true },
+    type: { type: String, enum: ['credit', 'debit', 'refund'], required: true },
+    details: { type: String, required: true }, // e.g., "Added via QR", "Booked Trip: Rishikesh"
+    status: { type: String, default: 'completed' }, // pending, completed
     createdAt: { type: Date, default: Date.now }
 });
 
