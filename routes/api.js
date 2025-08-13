@@ -36,6 +36,13 @@ const checkAdminPassword = (req, res, next) => {
     }
     next();
 };
+const checkAdminPasswordFromBody = (req, res, next) => {
+    if (!req.body.password || req.body.password !== process.env.ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'Invalid Admin Password' });
+    }
+    // If the password is correct, proceed to the route handler
+    next();
+};
 
 // =============================================
 // ADMIN ROUTES
@@ -122,7 +129,7 @@ router.delete('/admin/transactions/:transactionId', checkAdminPassword, async (r
 
 // --- Trip Management ---
 // Add a new trip
-router.post('/admin/trips', checkAdminPassword, upload.single('image'), async (req, res) => {
+router.post('/admin/trips', upload.single('image'), checkAdminPasswordFromBody, async (req, res) => {
     try {
         const { destination, originalPrice, salePrice, description, date, category, maxParticipants } = req.body;
         const imagePath = req.file ? `/${req.file.path.replace(/\\/g, "/")}` : ''; // Get the path of the uploaded file
