@@ -40,6 +40,12 @@ const checkAdminPassword = (req, res, next) => {
 // ADMIN ROUTES
 // =============================================
 
+// ✅ NEW: Route to verify admin password before loading data
+router.post('/admin/verify', checkAdminPassword, (req, res) => {
+    // If the checkAdminPassword middleware passes, the password is correct.
+    res.json({ success: true, message: 'Password verified.' });
+});
+
 // --- Trip Management ---
 // Add a new trip
 router.post('/admin/trips', checkAdminPassword, upload.single('image'), async (req, res) => {
