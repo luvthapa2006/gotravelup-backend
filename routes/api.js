@@ -39,7 +39,29 @@ const checkAdminPassword = (req, res, next) => {
 // =============================================
 // ADMIN ROUTES
 // =============================================
+router.post('/admin/refunds/:refundId/deny', checkAdminPassword, async (req, res) => {
+    try {
+        const refund = await RefundRequest.findById(req.params.refundId);
+        if (!refund || refund.status !== 'pending') {
+            return res.status(400).json({ message: 'Refund request not found or already processed.' });
+        }
 
+        // Mark the original booking as active again
+        const booking = await Booking.findById(refund.bookingId);
+        if (booking) {
+            booking.status = 'active';
+            await booking.save();
+        }
+
+        // Mark the refund request as denied
+        refund.status = 'denied';
+        await refund.save();
+
+        res.json({ success: true, message: 'Refund denied. The original booking has been reactivated.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
 // ✅ NEW: Route to verify admin password before loading data
 router.post('/admin/verify', checkAdminPassword, (req, res) => {
     // If the checkAdminPassword middleware passes, the password is correct.
@@ -148,6 +170,11 @@ router.post('/bookings/:bookingId/cancel', async (req, res) => {
         const booking = await Booking.findById(req.params.bookingId).populate('tripId');
         if (!booking || booking.userId.toString() !== req.session.userId) {
             return res.status(404).json({ message: 'Booking not found or access denied.' });
+        }
+        const trip = booking.tripId;
+        if (trip && trip.currentBookings > 0) {
+            trip.currentBookings -= 1;
+            await trip.save();
         }
 
         if (booking.status === 'cancelled') {
@@ -383,8 +410,8 @@ router.get('/my-trips', async (req, res) => {
         }
 
         // We no longer need to .populate() here since we saved the data
-        const userBookings = await Booking.find({ userId: req.session.userId });
-        
+        const userBookings = await Booking.find({ userId: req.session.userId, status: 'active' });
+
         // ✅ FIXED: Maps the data directly from the booking document
         const formattedBookings = userBookings.map(booking => ({
             _id: booking._id,
