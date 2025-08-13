@@ -451,6 +451,7 @@ router.get('/my-trips', async (req, res) => {
         // ✅ FIXED: Maps the data directly from the booking document
         const formattedBookings = userBookings.map(booking => ({
             _id: booking._id,
+            tripId: booking.tripId,
             destination: booking.destination,
             status: booking.status, // Uses the actual status
             bookedAt: booking.bookingDate,
