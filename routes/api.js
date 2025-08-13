@@ -369,9 +369,8 @@ router.get('/trips', async (req, res) => {
     }
 });
 
-// BOOK a trip (with a Transaction for data consistency)
+/// BOOK a trip (FINAL, with duplicate check and transaction)
 router.post('/book-trip', async (req, res) => {
-    // Start a new session for the transaction
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -382,9 +381,23 @@ router.post('/book-trip', async (req, res) => {
 
         const { tripId } = req.body;
         
-        // Find documents and pass the session to them
         const trip = await Trip.findById(tripId).session(session);
         const user = await User.findById(req.session.userId).session(session);
+
+        // --- START: NEW LOGIC TO PREVENT DUPLICATE BOOKINGS ---
+        const existingBooking = await Booking.findOne({ 
+            userId: user._id, 
+            tripId: trip._id,
+            status: 'active' // Only check for currently active bookings
+        }).session(session);
+
+        if (existingBooking) {
+            await session.abortTransaction();
+            session.endSession();
+            // Return a 409 Conflict error, which is appropriate
+            return res.status(409).json({ message: 'You have already booked this trip.' });
+        }
+        // --- END: NEW LOGIC ---
 
         if (!trip) {
             await session.abortTransaction();
@@ -397,7 +410,6 @@ router.post('/book-trip', async (req, res) => {
             return res.status(400).json({ message: 'Insufficient wallet balance' });
         }
 
-        // Perform all database operations within the transaction
         user.wallet -= trip.salePrice;
         trip.currentBookings += 1;
         
@@ -407,27 +419,25 @@ router.post('/book-trip', async (req, res) => {
             amount: trip.salePrice, 
             destination: trip.destination 
         });
-
-        // The save operations are now part of the transaction
+        
         await user.save({ session });
         await trip.save({ session });
         await booking.save({ session });
 
-        // If all operations succeed, commit the transaction
         await session.commitTransaction();
         session.endSession();
 
         res.json({ success: true, message: 'Trip booked successfully!', newWalletBalance: user.wallet });
 
     } catch (err) {
-        // If any error occurs, abort the transaction
         await session.abortTransaction();
         session.endSession();
         
-        console.error('Booking transaction error:', err); // Log the actual error for debugging
+        console.error('Booking transaction error:', err);
         res.status(500).json({ message: 'Server error during booking. Please try again.' });
     }
 });
+
 // GET my trips
 router.get('/my-trips', async (req, res) => {
     try {
