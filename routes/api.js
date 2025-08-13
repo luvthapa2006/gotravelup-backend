@@ -7,6 +7,7 @@ const fs = require('fs');
 const { User, Trip, Booking, Transaction, RefundRequest } = require('../config/database');
 
 const router = express.Router();
+const mongoose = require('mongoose');
 
 // --- Multer Configuration for Image Uploads ---
 const storage = multer.diskStorage({
@@ -368,40 +369,65 @@ router.get('/trips', async (req, res) => {
     }
 });
 
-// BOOK a trip
+// BOOK a trip (with a Transaction for data consistency)
 router.post('/book-trip', async (req, res) => {
+    // Start a new session for the transaction
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-        if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
+        if (!req.session.userId) {
+            return res.status(401).json({ message: 'Not logged in' });
+        }
 
         const { tripId } = req.body;
-        const trip = await Trip.findById(tripId);
-        const user = await User.findById(req.session.userId);
+        
+        // Find documents and pass the session to them
+        const trip = await Trip.findById(tripId).session(session);
+        const user = await User.findById(req.session.userId).session(session);
 
-        if (!trip) return res.status(404).json({ message: 'Trip not found' });
-        if (user.wallet < trip.salePrice) return res.status(400).json({ message: 'Insufficient wallet balance' });
+        if (!trip) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(404).json({ message: 'Trip not found' });
+        }
+        if (user.wallet < trip.salePrice) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(400).json({ message: 'Insufficient wallet balance' });
+        }
 
+        // Perform all database operations within the transaction
         user.wallet -= trip.salePrice;
         trip.currentBookings += 1;
         
-        await user.save();
-        await trip.save();
-
-        // ✅ FIXED: Saves all necessary info to the booking document
         const booking = new Booking({ 
             userId: user._id, 
             tripId: trip._id, 
             amount: trip.salePrice, 
             destination: trip.destination 
         });
-        await booking.save();
+
+        // The save operations are now part of the transaction
+        await user.save({ session });
+        await trip.save({ session });
+        await booking.save({ session });
+
+        // If all operations succeed, commit the transaction
+        await session.commitTransaction();
+        session.endSession();
 
         res.json({ success: true, message: 'Trip booked successfully!', newWalletBalance: user.wallet });
 
     } catch (err) {
-        res.status(500).json({ message: 'Server error' });
+        // If any error occurs, abort the transaction
+        await session.abortTransaction();
+        session.endSession();
+        
+        console.error('Booking transaction error:', err); // Log the actual error for debugging
+        res.status(500).json({ message: 'Server error during booking. Please try again.' });
     }
 });
-
 // GET my trips
 router.get('/my-trips', async (req, res) => {
     try {
