@@ -2,28 +2,26 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Parser } = require('json2csv');
-const path = require('path');
-const fs = require('fs');
 const { User, Trip, Booking, Transaction, RefundRequest } = require('../config/database');
-
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 const router = express.Router();
 const mongoose = require('mongoose');
 
 // --- Multer Configuration for Image Uploads ---
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        // Create an 'uploads' directory if it doesn't exist
-        const uploadDir = 'uploads/';
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir);
-        }
-        cb(null, uploadDir);
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'uniscape-trips',
+        allowed_formats: ['jpg', 'png', 'jpeg'],
     },
-    filename: function (req, file, cb) {
-        // Create a unique filename to avoid overwrites
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
 });
+    
 const upload = multer({ storage: storage });
 
 
@@ -140,7 +138,7 @@ router.delete('/admin/transactions/:transactionId', checkAdminPassword, async (r
 router.post('/admin/trips', upload.single('image'), checkAdminPasswordFromBody, async (req, res) => {
     try {
         const { destination, originalPrice, salePrice, description, date, category, maxParticipants } = req.body;
-        const imagePath = req.file ? `/${req.file.path.replace(/\\/g, "/")}` : ''; // Get the path of the uploaded file
+        const imagePath = req.file ? req.file.path : '';
 
         if (!imagePath) {
             return res.status(400).json({ success: false, message: 'Trip image is required.' });
