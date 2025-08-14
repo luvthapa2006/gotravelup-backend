@@ -261,7 +261,7 @@ router.delete('/admin/users/:id', checkAdminPassword, async (req, res) => {
 // Get users who booked a specific trip
 router.get('/admin/trips/:id/bookings', checkAdminPassword, async (req, res) => {
     try {
-        const bookings = await Booking.find({ tripId: req.params.id }).populate('userId', '-password');
+        const bookings = await Booking.find({ tripId: req.params.id, status: 'active' }).populate('userId', '-password');
         res.json({ success: true, bookings });
     } catch(err) {
         res.status(500).json({ success: false, message: 'Server error' });
