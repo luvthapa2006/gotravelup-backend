@@ -137,7 +137,7 @@ router.delete('/admin/transactions/:transactionId', checkAdminPassword, async (r
 // Add a new trip
 router.post('/admin/trips', upload.single('image'), checkAdminPasswordFromBody, async (req, res) => {
     try {
-        const { destination, originalPrice, salePrice, description, date, category, maxParticipants } = req.body;
+        const { destination, originalPrice, salePrice, description, tripPlan, date, category, maxParticipants } = req.body;
         const imagePath = req.file ? req.file.path : '';
 
         if (!imagePath) {
@@ -149,6 +149,7 @@ router.post('/admin/trips', upload.single('image'), checkAdminPasswordFromBody, 
             originalPrice,
             salePrice,
             description,
+            tripPlan,
             date,
             category,
             maxParticipants,
@@ -175,7 +176,20 @@ router.delete('/admin/trips/:id', checkAdminPassword, async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error.' });
     }
 });
+// ADD THIS NEW ROUTE in api.js
 
+// Edit a trip
+router.put('/admin/trips/:id', checkAdminPassword, async (req, res) => {
+    try {
+        const updatedTrip = await Trip.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!updatedTrip) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+        res.json({ success: true, message: 'Trip updated successfully!', trip: updatedTrip });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
 // CANCEL a trip booking
 router.post('/bookings/:bookingId/cancel', async (req, res) => {
     try {
