@@ -11,7 +11,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 // Add this line around line 12 in your api.js file
-const { sendWelcomeEmail, sendBookingConfirmationEmail, sendRefundRequestEmail } = require('../emailServices.js');
+const { sendWelcomeEmail, sendBookingConfirmationEmail, sendRefundRequestEmail, sendNewUserAdminNotification } = require('../emailServices.js');
 const router = express.Router();
 const mongoose = require('mongoose');
 
@@ -372,6 +372,7 @@ router.post('/register', async (req, res) => {
         await newUser.save();
         // 📧 SEND WELCOME EMAIL
         sendWelcomeEmail(newUser);
+        sendNewUserAdminNotification(newUser); 
         res.status(201).json({ success: true, message: 'User registered successfully' });
 
     } catch (err) {

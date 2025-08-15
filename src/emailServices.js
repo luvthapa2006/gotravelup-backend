@@ -36,6 +36,33 @@ const sendWelcomeEmail = async (user) => {
 };
 
 /**
+ * Sends a notification to the admin when a new user signs up.
+ * @param {object} user - The new user object from the database.
+ */
+const sendNewUserAdminNotification = async (user) => {
+    const mailOptions = {
+        from: `"UNISCAPE Notifier" <${process.env.EMAIL_USER}>`,
+        to: process.env.ADMIN_EMAIL, // Sends to the admin(s)
+        subject: `New User Registration: ${user.username}`,
+        html: `<h1>A new user has signed up!</h1>
+               <p>Here are their details:</p>
+               <ul>
+                 <li><b>Name:</b> ${user.name}</li>
+                 <li><b>Username:</b> ${user.username}</li>
+                 <li><b>Email:</b> ${user.email}</li>
+                 <li><b>Phone:</b> ${user.phone}</li>
+                 <li><b>SAP ID:</b> ${user.sapId}</li>
+               </ul>`
+    };
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`New user notification sent to admin for ${user.username}`);
+    } catch (error) {
+        console.error('Error sending new user notification to admin:', error);
+    }
+};
+
+/**
  * Sends a booking confirmation email to the admin.
  * @param {object} user - The user who booked the trip.
  * @param {object} trip - The trip that was booked.
@@ -95,5 +122,6 @@ const sendRefundRequestEmail = async (user, booking) => {
 module.exports = {
     sendWelcomeEmail,
     sendBookingConfirmationEmail,
-    sendRefundRequestEmail
+    sendRefundRequestEmail,
+    sendNewUserAdminNotification
 };
