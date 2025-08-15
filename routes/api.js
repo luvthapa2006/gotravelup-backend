@@ -304,27 +304,55 @@ router.post('/wallet/confirm-transaction/:transactionId', checkAdminPassword, as
 // PUBLIC & USER ROUTES
 // =============================================
 
-// REGISTER user
+// REPLACE the existing '/register' route in api.js with this one
+
 router.post('/register', async (req, res) => {
     try {
         const { name, gender, sapId, email, phone, username, password, referralCode } = req.body;
-        const existingUser = await User.findOne({ username });
+
+        // --- Check for duplicate email or SAP ID ---
+        const existingUser = await User.findOne({ $or: [{ username }, { email }, { sapId }] });
         if (existingUser) {
-            return res.status(400).json({ message: 'Username already taken' });
+            let message = 'User already exists.';
+            if (existingUser.username === username) {
+                message = 'Username is already taken.';
+            } else if (existingUser.email === email) {
+                message = 'An account with this email already exists.';
+            } else if (existingUser.sapId === sapId) {
+                message = 'An account with this SAP ID already exists.';
+            }
+            return res.status(409).json({ message });
         }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const generatedReferralCode = username.substring(0, 3).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
+        
+        // --- FIX: Change initial wallet amount from 50 to 0 ---
+        let initialWallet = 0; // ✅ CHANGE THIS LINE FROM 50 to 0
+
+        // This part keeps the referral code logic working if you need it later
+        if (referralCode) {
+            const referrer = await User.findOne({ referralCode: referralCode });
+            if (referrer) {
+                initialWallet += 100; // Add referral bonus
+            } else {
+                return res.status(400).json({ message: 'Invalid referral code provided.' });
+            }
+        }
+
         const newUser = new User({
             name, gender, sapId, email, phone, username,
             password: hashedPassword,
-            wallet: 50,
+            wallet: initialWallet, // Use the new initial amount
             referralCode: generatedReferralCode
         });
+
         await newUser.save();
         res.status(201).json({ success: true, message: 'User registered successfully' });
+
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error("Error during registration:", err);
+        res.status(500).json({ success: false, message: 'Server error during registration' });
     }
 });
 
