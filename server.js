@@ -34,8 +34,8 @@ require('dotenv').config();
 const path = require('path');
 const cors = require('cors');
 const session = require('express-session');
-const apiRoutes = require('./routes/api');
-const { connectToMongoDB } = require('./config/database');
+const apiRoutes = require('./routes/api.js');
+const { connectToMongoDB } = require('./config/database.js');
 const MongoStore = require('connect-mongo');
 
 // Initialize the Express app

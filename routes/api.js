@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Parser } = require('json2csv');
-const { User, Trip, Booking, Transaction, RefundRequest } = require('../config/database');
+const { User, Trip, Booking, Transaction, RefundRequest } = require('../config/database.js');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 cloudinary.config({
