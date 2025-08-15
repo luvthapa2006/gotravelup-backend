@@ -69,7 +69,12 @@ const refundRequestSchema = new mongoose.Schema({
     status: { type: String, default: 'pending' } // 'pending', 'approved'
 });
 
-
+const siteSettingsSchema = new mongoose.Schema({
+    // We use a key to ensure we only ever have one settings document
+    key: { type: String, default: 'site-settings', unique: true }, 
+    backgroundType: { type: String, enum: ['image', 'video'], default: 'image' },
+    backgroundUrl: { type: String, default: 'assets/bg1.jpg' } // Default background
+});
 // --- STEP 2: Create all models from the schemas ---
 
 const User = mongoose.model('User', userSchema);
@@ -77,6 +82,7 @@ const Trip = mongoose.model('Trip', tripSchema);
 const Booking = mongoose.model('Booking', bookingSchema);
 const Transaction = mongoose.model('Transaction', transactionSchema);
 const RefundRequest = mongoose.model('RefundRequest', refundRequestSchema);
+const SiteSettings = mongoose.model('SiteSettings', siteSettingsSchema);
 
 
 // --- STEP 3: Export the models ---
@@ -87,5 +93,6 @@ module.exports = {
     Trip,
     Booking,
     Transaction,
-    RefundRequest
+    RefundRequest,
+    SiteSettings
 };

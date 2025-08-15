@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Parser } = require('json2csv');
-const { User, Trip, Booking, Transaction, RefundRequest } = require('../config/database.js');
+const { User, Trip, Booking, Transaction, RefundRequest, SiteSettings} = require('../config/database.js');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 cloudinary.config({
@@ -182,6 +182,42 @@ router.delete('/admin/trips/:id', checkAdminPassword, async (req, res) => {
         res.json({ success: true, message: 'Trip deleted successfully.' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
+
+router.get('/settings/background', async (req, res) => {
+    try {
+        // Find the settings doc, or create it if it doesn't exist
+        let settings = await SiteSettings.findOne({ key: 'site-settings' });
+        if (!settings) {
+            settings = await new SiteSettings().save();
+        }
+        res.json(settings);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+router.post('/admin/settings/background', upload.single('backgroundFile'), checkAdminPasswordFromBody, async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file was uploaded.' });
+        }
+        
+        const { backgroundType } = req.body;
+        const backgroundUrl = req.file.path; // URL from Cloudinary
+
+        // Find the single settings document and update it, or create it if it doesn't exist.
+        const updatedSettings = await SiteSettings.findOneAndUpdate(
+            { key: 'site-settings' },
+            { backgroundType, backgroundUrl },
+            { new: true, upsert: true } // upsert: true creates the document if it's not found
+        );
+
+        res.json({ success: true, message: 'Background updated successfully!', settings: updatedSettings });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error while updating background' });
     }
 });
 // ADD THIS NEW ROUTE in api.js
