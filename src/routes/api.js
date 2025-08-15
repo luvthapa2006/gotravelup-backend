@@ -15,16 +15,28 @@ const { sendWelcomeEmail, sendBookingConfirmationEmail, sendRefundRequestEmail, 
 const router = express.Router();
 const mongoose = require('mongoose');
 
-// --- Multer Configuration for Image Uploads ---
-const storage = new CloudinaryStorage({
+
+// --- Multer Configuration for Trip Images ---
+const tripImageStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
         folder: 'uniscape-trips',
         allowed_formats: ['jpg', 'png', 'jpeg'],
     },
 });
-    
-const upload = multer({ storage: storage });
+const uploadTripImage = multer({ storage: tripImageStorage });
+
+
+// --- NEW: Multer Configuration for Backgrounds (Images & Videos) ---
+const backgroundStorage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'uniscape-backgrounds',
+        resource_type: 'auto', // ✅ Lets Cloudinary detect if it's an image or video
+        allowed_formats: ['jpg', 'png', 'jpeg', 'mp4', 'mov'], // ✅ Added video formats
+    },
+});
+const uploadBackground = multer({ storage: backgroundStorage });
 
 
 // --- Admin password check middleware ---
@@ -143,7 +155,7 @@ router.delete('/admin/transactions/:transactionId', checkAdminPassword, async (r
 
 // --- Trip Management ---
 // Add a new trip
-router.post('/admin/trips', upload.single('image'), checkAdminPasswordFromBody, async (req, res) => {
+router.post('/admin/trips', uploadTripImage.single('image'), checkAdminPasswordFromBody, async (req, res) => {
     try {
         const { destination, originalPrice, salePrice, description, tripPlan, date, category, maxParticipants } = req.body;
         const imagePath = req.file ? req.file.path : '';
@@ -197,7 +209,7 @@ router.get('/settings/background', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
-router.post('/admin/settings/background', upload.single('backgroundFile'), checkAdminPasswordFromBody, async (req, res) => {
+router.post('/admin/settings/background', uploadBackground.single('backgroundFile'), checkAdminPasswordFromBody, async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'No file was uploaded.' });
