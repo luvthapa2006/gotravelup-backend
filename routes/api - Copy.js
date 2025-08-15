@@ -10,8 +10,6 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-// Add this line around line 12 in your api.js file
-const { sendWelcomeEmail, sendBookingConfirmationEmail, sendRefundRequestEmail } = require('./emailService.js');
 const router = express.Router();
 const mongoose = require('mongoose');
 
@@ -59,12 +57,6 @@ router.post('/admin/refunds/:refundId/deny', checkAdminPassword, async (req, res
         if (booking) {
             booking.status = 'active';
             await booking.save();
-            const user = await User.findById(booking.userId);
-
-// 📧 SEND REFUND REQUEST EMAIL
-if (user) {
-    sendRefundRequestEmail(user, booking);
-}
         }
 
         // Mark the refund request as denied
@@ -370,8 +362,6 @@ router.post('/register', async (req, res) => {
         });
 
         await newUser.save();
-        // 📧 SEND WELCOME EMAIL
-        sendWelcomeEmail(newUser);
         res.status(201).json({ success: true, message: 'User registered successfully' });
 
     } catch (err) {
@@ -518,8 +508,6 @@ try {
 
     // --- Commit all changes to the database ---
     await session.commitTransaction();
-    // 📧 SEND BOOKING CONFIRMATION EMAIL
-    sendBookingConfirmationEmail(user, trip);
     session.endSession();
 
     res.json({ success: true, message: 'Trip booked successfully!', newWalletBalance: user.wallet });
