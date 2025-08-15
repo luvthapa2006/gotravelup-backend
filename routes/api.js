@@ -11,7 +11,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 // Add this line around line 12 in your api.js file
-const { sendWelcomeEmail, sendBookingConfirmationEmail, sendRefundRequestEmail } = require('./emailService.js');
+const { sendWelcomeEmail, sendBookingConfirmationEmail, sendRefundRequestEmail } = require('../emailService.js');
 const router = express.Router();
 const mongoose = require('mongoose');
 
