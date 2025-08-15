@@ -17,15 +17,37 @@ const transporter = nodemailer.createTransport({
  * @param {object} user - The user object from the database.
  */
 const sendWelcomeEmail = async (user) => {
+    const logoUrl = 'https://gotravelup.netlify.app/assets/logo.svg'; // A direct link to your logo
+
     const mailOptions = {
         from: `"UNISCAPE" <${process.env.EMAIL_USER}>`,
         to: user.email,
-        subject: 'Welcome to UNISCAPE! Your Adventure Awaits!',
-        html: `<h1>Welcome, ${user.name}!</h1>
-               <p>We're thrilled you've joined the UNISCAPE community. You can now log in and start exploring amazing trips.</p>
-               <p><b>Username:</b> ${user.username}</p>
-               <p>Happy travels!</p>
-               <p>The UNISCAPE Team</p>`
+        subject: 'Welcome to UNISCAPE! Your Adventure Awaits! 🏔️✈️',
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+                <div style="background-color: #007bff; color: white; padding: 20px; text-align: center;">
+                    <img src="${logoUrl}" alt="UNISCAPE Logo" width="60" style="margin-bottom: 10px;">
+                    <h1 style="margin: 0;">Welcome Aboard, ${user.name}!</h1>
+                </div>
+                <div style="padding: 30px;">
+                    <p>We are absolutely thrilled to have you join the UNISCAPE community! 🎉</p>
+                    <p>Your account has been created successfully, and a world of student-friendly adventures in Uttarakhand is now at your fingertips.</p>
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                        <h3 style="margin-top: 0;">Your Account Details:</h3>
+                        <p><strong>Username:</strong> ${user.username}</p>
+                        <p><strong>SAP ID:</strong> ${user.sapId}</p>
+                    </div>
+                    <h3 style="color: #007bff;">What's Next?</h3>
+                    <p>🎒 Log in to your dashboard, explore the upcoming trips, and get ready to make some unforgettable memories with your fellow UPES students!</p>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="https://gotravelup.netlify.app/dashboard" style="background-color: #28a745; color: white; padding: 15px 30px; text-decoration: none; border-radius: 50px; font-weight: bold;">Go to Dashboard</a>
+                    </div>
+                </div>
+                <div style="background-color: #f2f2f2; color: #777; padding: 15px; text-align: center; font-size: 12px;">
+                    <p>Happy Travels,<br>The UNISCAPE Team ✨</p>
+                </div>
+            </div>
+        `
     };
     try {
         await transporter.sendMail(mailOptions);
@@ -40,19 +62,48 @@ const sendWelcomeEmail = async (user) => {
  * @param {object} user - The new user object from the database.
  */
 const sendNewUserAdminNotification = async (user) => {
+    const registrationTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
     const mailOptions = {
         from: `"UNISCAPE Notifier" <${process.env.EMAIL_USER}>`,
         to: process.env.ADMIN_EMAIL, // Sends to the admin(s)
-        subject: `New User Registration: ${user.username}`,
-        html: `<h1>A new user has signed up!</h1>
-               <p>Here are their details:</p>
-               <ul>
-                 <li><b>Name:</b> ${user.name}</li>
-                 <li><b>Username:</b> ${user.username}</li>
-                 <li><b>Email:</b> ${user.email}</li>
-                 <li><b>Phone:</b> ${user.phone}</li>
-                 <li><b>SAP ID:</b> ${user.sapId}</li>
-               </ul>`
+        subject: `🎉 New User Registration: ${user.username}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto;">
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h1 style="color: #007bff; text-align: center;">👤 New User Signup</h1>
+                    <p style="text-align: center;">A new user has just registered on UNISCAPE.</p>
+                    <p style="text-align: center; font-size: 14px; color: #6c757d;">Registered on: ${registrationTime}</p>
+                    <hr>
+                    <h3 style="color: #333;">User Details:</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 10px; font-weight: bold;">Full Name:</td>
+                            <td style="padding: 10px;">${user.name}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 10px; font-weight: bold;">Username:</td>
+                            <td style="padding: 10px;">${user.username}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 10px; font-weight: bold;">Email:</td>
+                            <td style="padding: 10px;">${user.email}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 10px; font-weight: bold;">Phone:</td>
+                            <td style="padding: 10px;">${user.phone}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; font-weight: bold;">SAP ID:</td>
+                            <td style="padding: 10px;">${user.sapId}</td>
+                        </tr>
+                    </table>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <a href="https://gotravelup.netlify.app/admin.html" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View in Admin Panel</a>
+                    </div>
+                </div>
+            </div>
+        `
     };
     try {
         await transporter.sendMail(mailOptions);
