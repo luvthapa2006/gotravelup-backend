@@ -255,30 +255,65 @@ router.post('/bookings/:bookingId/cancel', async (req, res) => {
         if (!booking || booking.userId.toString() !== req.session.userId) {
             return res.status(404).json({ message: 'Booking not found or access denied.' });
         }
-        const trip = booking.tripId;
-        if (trip && trip.currentBookings > 0) {
-            trip.currentBookings -= 1;
-            await trip.save();
-        }
-
         if (booking.status === 'cancelled') {
             return res.status(400).json({ message: 'This trip has already been cancelled.' });
         }
 
-        // Create a refund request
-        const newRefund = new RefundRequest({
-            userId: booking.userId,
-            bookingId: booking._id,
-            tripDestination: booking.tripId.destination,
-            amount: booking.tripId.salePrice
-        });
-        await newRefund.save();
+        const trip = booking.tripId;
+        if (!trip) {
+            return res.status(404).json({ message: 'Associated trip could not be found.' });
+        }
 
-        // Mark the original booking as cancelled
+        // --- NEW: REFUND CALCULATION LOGIC ---
+        const now = new Date();
+        const tripDate = new Date(trip.date);
+        const hoursBeforeTrip = (tripDate - now) / (1000 * 60 * 60);
+        
+        // Decrement the booking count on the trip
+        if (trip.currentBookings > 0) {
+            trip.currentBookings -= 1;
+            await trip.save();
+        }
+        
+        // Mark the booking as cancelled
         booking.status = 'cancelled';
         await booking.save();
+        
+        // --- Tiered Refund Logic ---
+        if (hoursBeforeTrip < 24) {
+            // --- NO REFUND ---
+            return res.json({ success: true, message: 'Trip cancelled. No refund is applicable as it is less than 24 hours before the trip.' });
+        } else {
+            // --- REFUND APPLICABLE ---
+            let refundAmount = 0;
+            let refundPercentage = '';
 
-        res.json({ success: true, message: 'Trip cancelled. Your refund request has been submitted for approval.' });
+            if (hoursBeforeTrip >= 48) {
+                // 100% Refund
+                refundAmount = booking.amount;
+                refundPercentage = '100%';
+            } else {
+                // 50% Refund
+                refundAmount = booking.amount * 0.5;
+                refundPercentage = '50%';
+            }
+
+            // Create a refund request with the calculated amount
+            const newRefund = new RefundRequest({
+                userId: booking.userId,
+                bookingId: booking._id,
+                tripDestination: booking.destination,
+                amount: refundAmount
+            });
+            await newRefund.save();
+            
+            const user = await User.findById(booking.userId);
+            if (user) {
+                sendRefundRequestEmail(user, booking); // Notify admin
+            }
+
+            return res.json({ success: true, message: `Trip cancelled. Your refund request for ${refundPercentage} (₹${refundAmount}) has been submitted for approval.` });
+        }
 
     } catch (err) {
         console.error(err);
