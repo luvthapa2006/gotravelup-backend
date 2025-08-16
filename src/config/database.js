@@ -25,8 +25,20 @@ const transportSchema = new mongoose.Schema({
     departureTime: String,
     price: Number,
     capacity: Number,
+    currentBookings: { type: Number, default: 0 },
     status: { type: String, enum: ['active', 'coming_soon'], default: 'active' },
 });
+
+const transportBookingSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    transportId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transport' },
+    bookingDate: { type: Date, default: Date.now },
+    amount: Number,
+    routeName: String,
+    status: { type: String, default: 'active' } // e.g., active, cancelled
+});
+
+
 
 // Virtual property to create the full route name automatically
 transportSchema.virtual('routeName').get(function() {
@@ -37,6 +49,7 @@ transportSchema.virtual('routeName').get(function() {
 transportSchema.set('toJSON', { virtuals: true });
 
 const Transport = mongoose.model('Transport', transportSchema);
+const TransportBooking = mongoose.model('TransportBooking', transportBookingSchema);
 
 const userSchema = new mongoose.Schema({
     name: String,
@@ -123,5 +136,6 @@ module.exports = {
     Transaction,
     RefundRequest,
     SiteSettings,
-    Transport
+    Transport,
+    TransportBooking
 };

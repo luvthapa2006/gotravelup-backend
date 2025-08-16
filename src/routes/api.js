@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Parser } = require('json2csv');
-const { User, Trip, Booking, Transaction, RefundRequest, SiteSettings, Transport} = require('../config/database.js');
+const { User, Trip, Booking, Transaction, RefundRequest, SiteSettings, Transport, TransportBooking} = require('../config/database.js');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 cloudinary.config({
@@ -701,7 +701,62 @@ try {
     res.status(500).json({ message: 'Server error during booking. Please try again.' });
 }
 });
+// In api.js, near your other User & Public routes
 
+router.post('/book-transport', async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
+
+        const { transportId } = req.body;
+        const transport = await Transport.findById(transportId).session(session);
+        const user = await User.findById(req.session.userId).session(session);
+
+        if (!transport) return res.status(404).json({ message: 'Transport route not found.' });
+        if (transport.currentBookings >= transport.capacity) return res.status(400).json({ message: 'This shuttle is fully booked.' });
+        if (user.wallet < transport.price) return res.status(400).json({ message: 'Insufficient wallet balance.' });
+
+        // Deduct from wallet and create transaction
+        user.wallet -= transport.price;
+        const debitTransaction = new Transaction({
+            userId: user._id,
+            amount: transport.price,
+            type: 'debit',
+            details: `Booked Shuttle: ${transport.routeName}`
+        });
+
+        // Create new booking record
+        const newBooking = new TransportBooking({
+            userId: user._id,
+            transportId: transport._id,
+            amount: transport.price,
+            routeName: transport.routeName
+        });
+        
+        // Increment booking count
+        transport.currentBookings += 1;
+
+        await user.save({ session });
+        await debitTransaction.save({ session });
+        await newBooking.save({ session });
+        await transport.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        // You can add an admin email notification here if you like
+        sendBookingConfirmationEmail(user, transport);
+
+        res.json({ success: true, message: 'Seat booked successfully!', newWalletBalance: user.wallet });
+
+    } catch (err) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error('Transport booking error:', err);
+        res.status(500).json({ message: 'Server error during booking.' });
+    }
+});
 // GET my trips
 router.get('/my-trips', async (req, res) => {
     try {
