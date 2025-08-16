@@ -80,7 +80,15 @@ router.post('/admin/transport', checkAdminPassword, async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
-
+// Get ALL transport routes for the admin panel
+router.get('/admin/transport', checkAdminPassword, async (req, res) => {
+    try {
+        const allTransportOptions = await Transport.find(); // Gets all routes
+        res.json({ success: true, routes: allTransportOptions });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
 // ADMIN ROUTE to delete a transport option
 router.delete('/admin/transport/:id', checkAdminPassword, async (req, res) => {
     try {
