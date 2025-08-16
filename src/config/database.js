@@ -14,6 +14,15 @@ async function connectToMongoDB() {
 }
 
 // --- STEP 1: Define all schemas ---
+const transportSchema = new mongoose.Schema({
+    routeName: String, // e.g., "UPES Gate to ISBT Dehradun"
+    type: { type: String, enum: ['Shuttle', 'Carpool'] },
+    departureTime: String, // e.g., "10:00 AM"
+    price: Number,
+    capacity: Number,
+    status: { type: String, enum: ['active', 'coming_soon'], default: 'active' },
+});
+const Transport = mongoose.model('Transport', transportSchema)
 
 const userSchema = new mongoose.Schema({
     name: String,
@@ -42,6 +51,7 @@ const tripSchema = new mongoose.Schema({
     }],
     maxParticipants: Number,
     currentBookings: { type: Number, default: 0 },
+    status: { type: String, enum: ['active', 'coming_soon'], default: 'active' },
     category: String,
     createdAt: { type: Date, default: Date.now }
 });
@@ -98,5 +108,6 @@ module.exports = {
     Booking,
     Transaction,
     RefundRequest,
-    SiteSettings
+    SiteSettings,
+    Transport
 };

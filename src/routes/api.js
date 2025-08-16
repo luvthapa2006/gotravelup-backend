@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { Parser } = require('json2csv');
-const { User, Trip, Booking, Transaction, RefundRequest, SiteSettings} = require('../config/database.js');
+const { User, Trip, Booking, Transaction, RefundRequest, SiteSettings, Transport} = require('../config/database.js');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 cloudinary.config({
@@ -59,6 +59,37 @@ const checkAdminPasswordFromBody = (req, res, next) => {
 // =============================================
 // ADMIN ROUTES
 // =============================================
+
+// PUBLIC ROUTE to get all active transport options
+router.get('/transport', async (req, res) => {
+    try {
+        const transportOptions = await Transport.find({ status: 'active' });
+        res.json(transportOptions);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ADMIN ROUTE to add a new transport option
+router.post('/admin/transport', checkAdminPassword, async (req, res) => {
+    try {
+        const newTransport = new Transport(req.body);
+        await newTransport.save();
+        res.json({ success: true, message: 'Transport route added successfully!' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// ADMIN ROUTE to delete a transport option
+router.delete('/admin/transport/:id', checkAdminPassword, async (req, res) => {
+    try {
+        await Transport.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: 'Transport route deleted successfully.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
 router.post('/admin/refunds/:refundId/deny', checkAdminPassword, async (req, res) => {
     try {
         const refund = await RefundRequest.findById(req.params.refundId);
@@ -157,7 +188,7 @@ router.delete('/admin/transactions/:transactionId', checkAdminPassword, async (r
 // Add a new trip
 router.post('/admin/trips', uploadTripImage.single('image'), checkAdminPasswordFromBody, async (req, res) => {
     try {
-        const { destination, originalPrice, salePrice, description, tripPlan, date, category, maxParticipants, paymentDetails } = req.body;
+        const { destination, originalPrice, salePrice, description, tripPlan, date, category, maxParticipants, paymentDetails, status } = req.body;
         const imagePath = req.file ? req.file.path : '';
 
         if (!imagePath) {
@@ -174,6 +205,7 @@ router.post('/admin/trips', uploadTripImage.single('image'), checkAdminPasswordF
             category,
             maxParticipants,
             image: imagePath, // Save the path to the image
+            status: status === 'active' ? 'active' : 'coming_soon',
             paymentDetails: paymentDetails ? JSON.parse(paymentDetails) : [], // Parse payment details if provided
         });
 
@@ -243,6 +275,20 @@ router.put('/admin/trips/:id', checkAdminPassword, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Trip not found' });
         }
         res.json({ success: true, message: 'Trip updated successfully!', trip: updatedTrip });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
+router.put('/admin/trips/:id/status', checkAdminPassword, async (req, res) => {
+    try {
+        const { status } = req.body;
+        const trip = await Trip.findById(req.params.id);
+        if (!trip) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+        trip.status = status;
+        await trip.save();
+        res.json({ success: true, message: 'Trip status updated successfully!', trip });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Server error.' });
     }
