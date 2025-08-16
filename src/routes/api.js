@@ -123,6 +123,8 @@ router.get('/my-transport-bookings', async (req, res) => {
 });
 
 // USER: Cancel a shuttle booking
+// In api.js, replace the existing /transport-bookings/:bookingId/cancel route
+
 router.post('/transport-bookings/:bookingId/cancel', async (req, res) => {
     if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
     try {
@@ -130,19 +132,25 @@ router.post('/transport-bookings/:bookingId/cancel', async (req, res) => {
         if (!booking || booking.userId.toString() !== req.session.userId) {
             return res.status(404).json({ message: 'Booking not found.' });
         }
+        if (booking.status === 'cancelled') {
+            return res.status(400).json({ message: 'This booking has already been cancelled.' });
+        }
 
-        // Refund logic (simplified: 100% refund for now, can be tiered later)
-        const user = await User.findById(booking.userId);
-        user.wallet += booking.amount;
-        
-        // Create a refund transaction
-        const refundTransaction = new Transaction({
-            userId: user._id,
-            amount: booking.amount,
-            type: 'refund',
-            details: `Refund for Shuttle: ${booking.routeName}`
+        // --- ❌ REMOVE THE INSTANT REFUND LOGIC ---
+        // const user = await User.findById(booking.userId);
+        // user.wallet += booking.amount;
+        // const refundTransaction = new Transaction({ ... });
+
+        // --- ✅ ADD LOGIC TO CREATE A REFUND REQUEST INSTEAD ---
+        const newRefund = new RefundRequest({
+            userId: booking.userId,
+            bookingId: booking._id, // Links to the TransportBooking
+            tripDestination: booking.routeName, // Use routeName for the description
+            amount: booking.amount
         });
+        await newRefund.save();
 
+        // Mark the original booking as cancelled
         booking.status = 'cancelled';
         
         // Decrement the booking count on the transport route
@@ -151,17 +159,22 @@ router.post('/transport-bookings/:bookingId/cancel', async (req, res) => {
             transport.currentBookings -= 1;
             await transport.save();
         }
-
-        await user.save();
-        await refundTransaction.save();
+        
         await booking.save();
 
-        res.json({ success: true, message: 'Shuttle booking cancelled. The amount has been refunded to your wallet.' });
+        // Notify admin about the new request
+        const user = await User.findById(booking.userId);
+        if (user) {
+            sendRefundRequestEmail(user, { destination: booking.routeName, amount: booking.amount });
+        }
+
+        res.json({ success: true, message: 'Shuttle booking cancelled. Your refund request has been submitted for approval.' });
+
     } catch (err) {
+        console.error('Error during shuttle cancellation:', err);
         res.status(500).json({ message: 'Server error during cancellation.' });
     }
 });
-
 // ADMIN ROUTE to add a new transport option
 router.post('/admin/transport', checkAdminPassword, async (req, res) => {
     try {
