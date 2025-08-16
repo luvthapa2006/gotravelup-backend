@@ -157,7 +157,7 @@ router.delete('/admin/transactions/:transactionId', checkAdminPassword, async (r
 // Add a new trip
 router.post('/admin/trips', uploadTripImage.single('image'), checkAdminPasswordFromBody, async (req, res) => {
     try {
-        const { destination, originalPrice, salePrice, description, tripPlan, date, category, maxParticipants } = req.body;
+        const { destination, originalPrice, salePrice, description, tripPlan, date, category, maxParticipants, paymentDetails } = req.body;
         const imagePath = req.file ? req.file.path : '';
 
         if (!imagePath) {
@@ -173,7 +173,8 @@ router.post('/admin/trips', uploadTripImage.single('image'), checkAdminPasswordF
             date,
             category,
             maxParticipants,
-            image: imagePath // Save the path to the image
+            image: imagePath, // Save the path to the image
+            paymentDetails: paymentDetails ? JSON.parse(paymentDetails) : [], // Parse payment details if provided
         });
 
         await newTrip.save();

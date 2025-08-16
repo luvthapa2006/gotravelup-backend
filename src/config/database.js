@@ -36,6 +36,10 @@ const tripSchema = new mongoose.Schema({
     salePrice: Number,
     description: String,
     tripPlan: String,
+    paymentDetails: [{
+    description: String,
+    price: Number
+    }],
     maxParticipants: Number,
     currentBookings: { type: Number, default: 0 },
     category: String,
