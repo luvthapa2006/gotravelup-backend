@@ -60,6 +60,35 @@ const checkAdminPasswordFromBody = (req, res, next) => {
 // ADMIN ROUTES
 // =============================================
 
+// Edit a transport route
+router.put('/admin/transport/:id', checkAdminPassword, async (req, res) => {
+    try {
+        const updatedTransport = await Transport.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!updatedTransport) {
+            return res.status(404).json({ success: false, message: 'Transport route not found' });
+        }
+        res.json({ success: true, message: 'Transport route updated successfully!', transport: updatedTransport });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
+
+// Toggle transport route status
+router.put('/admin/transport/:id/status', checkAdminPassword, async (req, res) => {
+    try {
+        const { status } = req.body;
+        const transport = await Transport.findById(req.params.id);
+        if (!transport) {
+            return res.status(404).json({ success: false, message: 'Transport route not found' });
+        }
+        transport.status = status;
+        await transport.save();
+        res.json({ success: true, message: 'Transport status updated successfully!', transport });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error.' });
+    }
+});
+
 // PUBLIC ROUTE to get all active transport options
 router.get('/transport', async (req, res) => {
     try {
