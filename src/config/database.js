@@ -103,13 +103,15 @@ const transactionSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// In database.js
 const refundRequestSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    bookingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
-    tripDestination: String,
+    bookingId: { type: mongoose.Schema.Types.ObjectId }, // No 'ref' needed for flexibility
+    bookingType: { type: String, enum: ['trip', 'shuttle'], default: 'trip' }, // ✅ ADD THIS LINE
+    tripDestination: String, // Will be used for both trip and route names
     amount: Number,
     requestedAt: { type: Date, default: Date.now },
-    status: { type: String, default: 'pending' } // 'pending', 'approved'
+    status: { type: String, default: 'pending' }
 });
 
 const siteSettingsSchema = new mongoose.Schema({
