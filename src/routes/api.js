@@ -99,10 +99,73 @@ router.get('/transport', async (req, res) => {
     }
 });
 
+// ✅ ADD THESE NEW ROUTES to api.js
+
+// ADMIN: Get users who booked a specific shuttle
+router.get('/admin/transport/:id/bookings', checkAdminPassword, async (req, res) => {
+    try {
+        const bookings = await TransportBooking.find({ transportId: req.params.id, status: 'active' }).populate('userId', '-password');
+        res.json({ success: true, bookings });
+    } catch(err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// USER: Get my shuttle bookings
+router.get('/my-transport-bookings', async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ success: false, message: 'Not logged in' });
+    try {
+        const bookings = await TransportBooking.find({ userId: req.session.userId, status: 'active' });
+        res.json({ success: true, bookings });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// USER: Cancel a shuttle booking
+router.post('/transport-bookings/:bookingId/cancel', async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ message: 'Not logged in' });
+    try {
+        const booking = await TransportBooking.findById(req.params.bookingId);
+        if (!booking || booking.userId.toString() !== req.session.userId) {
+            return res.status(404).json({ message: 'Booking not found.' });
+        }
+
+        // Refund logic (simplified: 100% refund for now, can be tiered later)
+        const user = await User.findById(booking.userId);
+        user.wallet += booking.amount;
+        
+        // Create a refund transaction
+        const refundTransaction = new Transaction({
+            userId: user._id,
+            amount: booking.amount,
+            type: 'refund',
+            details: `Refund for Shuttle: ${booking.routeName}`
+        });
+
+        booking.status = 'cancelled';
+        
+        // Decrement the booking count on the transport route
+        const transport = await Transport.findById(booking.transportId);
+        if (transport && transport.currentBookings > 0) {
+            transport.currentBookings -= 1;
+            await transport.save();
+        }
+
+        await user.save();
+        await refundTransaction.save();
+        await booking.save();
+
+        res.json({ success: true, message: 'Shuttle booking cancelled. The amount has been refunded to your wallet.' });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error during cancellation.' });
+    }
+});
+
 // ADMIN ROUTE to add a new transport option
 router.post('/admin/transport', checkAdminPassword, async (req, res) => {
     try {
-        const newTransport = new Transport(req.body);
+        const newTransport = new Transport({ ...req.body, date: req.body.date });
         await newTransport.save();
         res.json({ success: true, message: 'Transport route added successfully!' });
     } catch (err) {
@@ -731,7 +794,8 @@ router.post('/book-transport', async (req, res) => {
             userId: user._id,
             transportId: transport._id,
             amount: transport.price,
-            routeName: transport.routeName
+            routeName: transport.routeName,
+            date: transport.date,
         });
         
         // Increment booking count

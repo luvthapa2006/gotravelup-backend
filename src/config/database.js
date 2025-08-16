@@ -23,6 +23,7 @@ const transportSchema = new mongoose.Schema({
     },
     type: { type: String, enum: ['Shuttle', 'Carpool'] },
     departureTime: String,
+    date: Date,
     price: Number,
     capacity: Number,
     currentBookings: { type: Number, default: 0 },
@@ -33,6 +34,7 @@ const transportBookingSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     transportId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transport' },
     bookingDate: { type: Date, default: Date.now },
+    date: Date,
     amount: Number,
     routeName: String,
     status: { type: String, default: 'active' } // e.g., active, cancelled
