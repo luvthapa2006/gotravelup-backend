@@ -1,83 +1,61 @@
-// MUST go at the very top before requiring any other files
-const express = require('express');
+// server.js
 
-// Patch express & Router before anything else loads
-['get', 'post', 'put', 'delete', 'use'].forEach(method => {
-  const original = express.application[method];
-  express.application[method] = function (path, ...handlers) {
-    if (typeof path === 'string' && path.startsWith('http')) {
-      console.error(`🚨 BAD ROUTE on app.${method}:`, path);
-      console.trace();
-    }
-    return original.call(this, path, ...handlers);
-  };
-});
+// Patch express if you have it (optional, from your file)
+// ... (your express patch code can remain here) ...
 
-const origRouter = express.Router;
-express.Router = function (...args) {
-  const router = origRouter.apply(this, args);
-  ['get', 'post', 'put', 'delete', 'use'].forEach(method => {
-    const orig = router[method];
-    router[method] = function (path, ...handlers) {
-      if (typeof path === 'string' && path.startsWith('http')) {
-        console.error(`🚨 BAD ROUTE on router.${method}:`, path);
-        console.trace();
-      }
-      return orig.call(this, path, ...handlers);
-    };
-  });
-  return router;
-};
-
-// Now load everything else
 require('dotenv').config();
+const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const session = require('express-session');
-const apiRoutes = require('./routes/api.js');
-const { connectToMongoDB } = require('./config/database.js');
+const helmet = require('helmet'); // ✅ Import helmet
+const rateLimit = require('express-rate-limit'); // ✅ Import express-rate-limit
 const MongoStore = require('connect-mongo');
 
-// Initialize the Express app
+const apiRoutes = require('./routes/api.js');
+const { connectToMongoDB } = require('./config/database.js');
+
 const app = express();
-
-// --- Main Server Configuration Starts Here ---
-
-// Disable the x-powered-by header for security
-app.disable('x-powered-by');
-
-// Connect to MongoDB
 connectToMongoDB();
 
-// Define the Port
-const PORT = process.env.PORT || 3001;
+// --- ✅ SECURITY MIDDLEWARE ---
 
-// List of allowed origins
+// 1. Apply Helmet for essential security headers
+app.use(helmet());
+
+// 2. Configure CORS to only allow your Netlify frontend
 const allowedOrigins = [
-    'https://gotravelup.netlify.app',
-    'https://gotravelup-frontend.onrender.com'
+    'https://gotravelup.netlify.app', // Your production frontend
+    'https://gotravelup-frontend.onrender.com' // Your other frontend
+    // You can add 'http://localhost:xxxx' here for local development if needed
 ];
-
-// CORS configuration
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS'));
+            callback(new Error('This origin is not allowed by CORS'));
         }
     },
     credentials: true
 }));
 
-// Middleware to parse JSON bodies
-app.use(express.json());
-app.use('/uploads', express.static('uploads'));
-app.use('/js', express.static('js'));
-app.use('/assets', express.static('assets'));
+// 3. Apply Rate Limiting to all API requests
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+app.use('/api', limiter);
 
-// Session configuration
-app.set('trust proxy', 1); // Important for services like Render
+
+// --- Standard Middleware ---
+app.use(express.json());
+app.set('trust proxy', 1);
+
+// Session configuration (already secure, no changes needed)
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -91,15 +69,11 @@ app.use(session({
     }
 }));
 
-// API Routes
+
+// --- API Routes ---
 app.use('/api', apiRoutes);
 
-// Root endpoint for testing
-app.get('/', (req, res) => {
-    res.send('Good to Go Backend is running! 🚀');
-});
-
-// Start the server
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`✅ Server is running on port ${PORT}`);
 });
