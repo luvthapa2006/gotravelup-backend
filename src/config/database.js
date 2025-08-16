@@ -14,15 +14,29 @@ async function connectToMongoDB() {
 }
 
 // --- STEP 1: Define all schemas ---
+// In database.js
 const transportSchema = new mongoose.Schema({
-    routeName: String, // e.g., "UPES Gate to ISBT Dehradun"
+    departure: { type: String, default: 'UPES Gate' },
+    destination: { 
+        type: String, 
+        enum: ['ISBT Dehradun', 'Dehradun Railway Station', 'Jolly Grant Airport'] 
+    },
     type: { type: String, enum: ['Shuttle', 'Carpool'] },
-    departureTime: String, // e.g., "10:00 AM"
+    departureTime: String,
     price: Number,
     capacity: Number,
     status: { type: String, enum: ['active', 'coming_soon'], default: 'active' },
 });
-const Transport = mongoose.model('Transport', transportSchema)
+
+// Virtual property to create the full route name automatically
+transportSchema.virtual('routeName').get(function() {
+  return `${this.departure} to ${this.destination}`;
+});
+
+// Ensure virtuals are included when converting to JSON
+transportSchema.set('toJSON', { virtuals: true });
+
+const Transport = mongoose.model('Transport', transportSchema);
 
 const userSchema = new mongoose.Schema({
     name: String,
